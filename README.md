@@ -50,6 +50,7 @@ Please to reach out with any questions or suggestions.
 Happy coding! 🚀🚀🚀
 
 # Beyond-ChatGPT
+
 Chainlit App using Python streaming for Level 0 MLOps
 
 LLM Application with Chainlit, Docker, and Huggingface Spaces
@@ -147,3 +148,4 @@ https://huggingface.co/spaces/your-username/llm-app
 Conclusion
 You've successfully created an LLM application with Chainlit, containerized it with Docker, and deployed it on Huggingface Spaces. Visit the link to interact with your deployed application.
 
+Please refer to the [LLMOps Dev Environment](https://github.com/AI-Maker-Space/LLMOps-Dev-101/)https://github.com/AI-Maker-Space/LLMOps-Dev-101/ for instructions.
