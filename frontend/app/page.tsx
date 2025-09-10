@@ -36,17 +36,25 @@ export default function Home() {
     }
 
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: `user-${Date.now()}`,
       role: 'user',
       content: inputMessage,
       timestamp: new Date()
     }
 
     setMessages(prev => [...prev, userMessage])
+    const currentInput = inputMessage
     setInputMessage('')
     setIsLoading(true)
 
     try {
+      console.log('Sending request to /api/chat with:', {
+        developer_message: developerMessage || 'You are a helpful AI assistant.',
+        user_message: currentInput,
+        api_key: apiKey ? '***' : 'MISSING',
+        model: 'gpt-4.1-mini'
+      })
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -54,11 +62,14 @@ export default function Home() {
         },
         body: JSON.stringify({
           developer_message: developerMessage || 'You are a helpful AI assistant.',
-          user_message: inputMessage,
+          user_message: currentInput,
           api_key: apiKey,
           model: 'gpt-4.1-mini'
         }),
       })
+
+      console.log('Response status:', response.status)
+      console.log('Response headers:', response.headers)
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
@@ -68,8 +79,9 @@ export default function Home() {
       if (!reader) throw new Error('No response body')
 
       let aiResponse = ''
+      const aiMessageId = `ai-${Date.now()}`
       const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: aiMessageId,
         role: 'ai',
         content: '',
         timestamp: new Date()
@@ -83,10 +95,12 @@ export default function Home() {
 
         const chunk = new TextDecoder().decode(value)
         aiResponse += chunk
+        console.log('Received chunk:', chunk)
+        console.log('Current AI response:', aiResponse)
 
         setMessages(prev => 
           prev.map(msg => 
-            msg.id === aiMessage.id 
+            msg.id === aiMessageId 
               ? { ...msg, content: aiResponse }
               : msg
           )
@@ -96,7 +110,7 @@ export default function Home() {
     } catch (error) {
       console.error('Error:', error)
       const errorMessage: Message = {
-        id: Date.now().toString(),
+        id: `error-${Date.now()}`,
         role: 'ai',
         content: 'Sorry, I encountered an error. Please check your API key and try again.',
         timestamp: new Date()

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 # Import OpenAI client for interacting with OpenAI's API
 from openai import OpenAI
 import os
+import asyncio
 from typing import Optional
 
 # Initialize FastAPI application with a title
@@ -34,6 +35,31 @@ class ChatRequest(BaseModel):
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
     try:
+        # Check if we should use mock responses (for testing without API key)
+        use_mock = request.api_key == "test" or request.api_key == ""
+        
+        if use_mock:
+            # Create a mock streaming response for testing
+            async def generate_mock():
+                mock_responses = [
+                    "Hello! I'm a mock AI assistant. ",
+                    "I can see you're testing the application. ",
+                    "This is a simulated response that streams word by word. ",
+                    "The frontend is working correctly! ",
+                    "You can replace this with a real OpenAI API key to get actual AI responses. ",
+                    "Thanks for testing the AI Engineer Challenge! 🚀"
+                ]
+                
+                for response in mock_responses:
+                    # Simulate streaming by yielding words one by one
+                    words = response.split()
+                    for word in words:
+                        yield word + " "
+                        await asyncio.sleep(0.1)  # Small delay to simulate streaming
+                    yield "\n\n"
+                
+            return StreamingResponse(generate_mock(), media_type="text/plain")
+        
         # Initialize OpenAI client with the provided API key
         client = OpenAI(api_key=request.api_key)
         
