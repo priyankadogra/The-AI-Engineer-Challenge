@@ -10,11 +10,14 @@ interface Message {
   timestamp: Date
 }
 
+type Emotion = 'neutral' | 'happy' | 'sad' | 'angry'
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputMessage, setInputMessage] = useState('')
   const [developerMessage, setDeveloperMessage] = useState('')
   const [apiKey, setApiKey] = useState('')
+  const [selectedEmotion, setSelectedEmotion] = useState<Emotion>('neutral')
   const [isLoading, setIsLoading] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -35,11 +38,26 @@ export default function Home() {
       return
     }
 
+    // Create emotion-prefixed message
+    const emotionPrefix = selectedEmotion !== 'neutral' ? `[${selectedEmotion.toUpperCase()}] ` : ''
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: inputMessage,
+      content: `${emotionPrefix}${inputMessage}`,
       timestamp: new Date()
+    }
+
+    // Create emotion-aware system prompt
+    const getEmotionSystemPrompt = (emotion: Emotion, basePrompt: string) => {
+      const emotionInstructions = {
+        happy: "Respond in a cheerful, upbeat, and positive manner. Use enthusiastic language and emojis when appropriate. Match the user's happy mood.",
+        sad: "Respond with sadness. Don't be too wordy. Could be a bit grumbly.",
+        angry: "Response could be a little bit harsh but not to the extent it would be indecent or hurt feelings. Talk like how a child would talk when it's angry.",
+        neutral: "Respond in a balanced, professional, and helpful manner."
+      }
+      
+      const emotionInstruction = emotionInstructions[emotion]
+      return `${basePrompt}\n\nIMPORTANT: The user's message includes an emotion tag [${emotion.toUpperCase()}]. ${emotionInstruction}`
     }
 
     setMessages(prev => [...prev, userMessage])
@@ -48,11 +66,13 @@ export default function Home() {
     setIsLoading(true)
 
     try {
+      const emotionAwarePrompt = getEmotionSystemPrompt(selectedEmotion, developerMessage || 'You are a helpful AI assistant.')
       console.log('Sending request to /api/chat with:', {
-        developer_message: developerMessage || 'You are a helpful AI assistant.',
-        user_message: currentInput,
+        developer_message: emotionAwarePrompt,
+        user_message: `${emotionPrefix}${currentInput}`,
         api_key: apiKey ? '***' : 'MISSING',
-        model: 'gpt-4.1-mini'
+        model: 'gpt-4.1-mini',
+        emotion: selectedEmotion
       })
 
       const response = await fetch('/api/chat', {
@@ -61,8 +81,8 @@ export default function Home() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          developer_message: developerMessage || 'You are a helpful AI assistant.',
-          user_message: currentInput,
+          developer_message: getEmotionSystemPrompt(selectedEmotion, developerMessage || 'You are a helpful AI assistant.'),
+          user_message: `${emotionPrefix}${currentInput}`,
           api_key: apiKey,
           model: 'gpt-4.1-mini'
         }),
@@ -163,7 +183,7 @@ export default function Home() {
         <div className="bg-white border-b border-slate-200 p-4">
           <div className="max-w-6xl mx-auto space-y-4">
             <h3 className="font-semibold text-slate-900">Configuration</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   OpenAI API Key
@@ -187,6 +207,21 @@ export default function Home() {
                   placeholder="You are a helpful AI assistant..."
                   className="input-field"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Emotion
+                </label>
+                <select
+                  value={selectedEmotion}
+                  onChange={(e) => setSelectedEmotion(e.target.value as Emotion)}
+                  className="input-field"
+                >
+                  <option value="neutral">😐 Neutral</option>
+                  <option value="happy">😊 Happy</option>
+                  <option value="sad">😢 Sad</option>
+                  <option value="angry">😠 Angry</option>
+                </select>
               </div>
             </div>
           </div>
@@ -263,6 +298,25 @@ export default function Home() {
 
           {/* Input Form */}
           <div className="border-t border-slate-200 p-6">
+            <div className="flex items-center space-x-3 mb-3">
+              <span className="text-sm text-slate-600">Current emotion:</span>
+              <span className="text-lg">
+                {selectedEmotion === 'neutral' && '😐'}
+                {selectedEmotion === 'happy' && '😊'}
+                {selectedEmotion === 'sad' && '😢'}
+                {selectedEmotion === 'angry' && '😠'}
+              </span>
+              <span className="text-sm font-medium text-slate-700 capitalize">
+                {selectedEmotion}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowSettings(!showSettings)}
+                className="text-xs text-blue-600 hover:text-blue-800 underline"
+              >
+                Change
+              </button>
+            </div>
             <form onSubmit={handleSubmit} className="flex space-x-4">
               <input
                 type="text"
