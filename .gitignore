@@ -1,7 +1,5 @@
 # Project Specific
 uv.lock
-
->>>>>>> 225098b (Revamped AI Engineering Challenge)
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -168,5 +166,37 @@ cython_debug/
 # Dependencies
 node_modules/
 
+# Build folders and outputs
+build/
+dist/
+out/
+.output/
+
 # Next.js build output
 .next/
+.next-build/
+
+# React build output
+build-react/
+
+# Vite build output
+build-vite/
+
+# Webpack build output
+build-webpack/
+
+# TypeScript build output
+lib/
+types/
+
+# General build directories
+**/build/
+**/dist/
+**/out/
+**/.next/
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+.temp/

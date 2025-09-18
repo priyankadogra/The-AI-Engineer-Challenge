@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Send, Bot, User, Settings, Sparkles } from 'lucide-react'
+import { Send, Bot, User, Settings, Sparkles, Upload, FileText, X } from 'lucide-react'
 
 interface Message {
   id: string
@@ -12,6 +12,18 @@ interface Message {
 
 type Emotion = 'neutral' | 'happy' | 'sad' | 'angry'
 
+interface PDFUpload {
+  filename: string
+  content: string
+}
+
+interface IndexedPDFsResponse {
+  indexed_pdfs: string[]
+  pdf_details: Record<string, { chunks_count: number; total_length: number; indexed_at: number }>
+  total_chunks: number
+  vector_db_active: boolean
+}
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputMessage, setInputMessage] = useState('')
@@ -20,7 +32,11 @@ export default function Home() {
   const [selectedEmotion, setSelectedEmotion] = useState<Emotion>('neutral')
   const [isLoading, setIsLoading] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [uploadedPDF, setUploadedPDF] = useState<PDFUpload | null>(null)
+  const [indexedPDFs, setIndexedPDFs] = useState<IndexedPDFsResponse | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -29,6 +45,11 @@ export default function Home() {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  useEffect(() => {
+    // Load indexed PDFs on component mount
+    fetchIndexedPDFs()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -84,7 +105,8 @@ export default function Home() {
           developer_message: getEmotionSystemPrompt(selectedEmotion, developerMessage || 'You are a helpful AI assistant.'),
           user_message: `${emotionPrefix}${currentInput}`,
           api_key: apiKey,
-          model: 'gpt-4.1-mini'
+          model: 'gpt-4.1-mini',
+          pdf_content: uploadedPDF?.content || null
         }),
       })
 
@@ -145,6 +167,76 @@ export default function Home() {
     setMessages([])
   }
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      alert('Please upload a PDF file only')
+      return
+    }
+
+    if (!apiKey || apiKey.trim() === '' || apiKey === 'test') {
+      alert('Please enter a valid OpenAI API key in the settings before uploading a PDF')
+      return
+    }
+
+    setIsUploading(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('api_key', apiKey || 'test')
+
+      const response = await fetch('/api/upload-pdf', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setUploadedPDF({
+          filename: result.filename,
+          content: result.content
+        })
+        const chunksMessage = result.chunks_indexed ? ` (${result.chunks_indexed} chunks indexed)` : ''
+        alert(`Successfully uploaded: ${result.filename}${chunksMessage}`)
+        
+        // Fetch updated list of indexed PDFs
+        await fetchIndexedPDFs()
+      } else {
+        alert(`Upload failed: ${result.message}`)
+      }
+    } catch (error) {
+      console.error('Upload error:', error)
+      alert('Failed to upload PDF. Please try again.')
+    } finally {
+      setIsUploading(false)
+      // Clear the file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
+  const fetchIndexedPDFs = async () => {
+    try {
+      const response = await fetch('/api/indexed-pdfs')
+      if (response.ok) {
+        const data = await response.json()
+        setIndexedPDFs(data)
+      }
+    } catch (error) {
+      console.error('Error fetching indexed PDFs:', error)
+    }
+  }
+
+  const removePDF = () => {
+    setUploadedPDF(null)
+    setIndexedPDFs(null)
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       {/* Header */}
@@ -161,6 +253,23 @@ export default function Home() {
           </div>
           
           <div className="flex items-center space-x-3">
+            {/* PDF Upload Button */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              accept=".pdf"
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              title={apiKey && apiKey !== 'test' ? "Upload PDF for RAG indexing" : "Upload PDF (API key required)"}
+            >
+              <Upload className={`w-5 h-5 ${isUploading ? 'text-blue-500 animate-spin' : apiKey && apiKey !== 'test' ? 'text-slate-600' : 'text-slate-400'}`} />
+            </button>
+            
             <button
               onClick={() => setShowSettings(!showSettings)}
               className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
@@ -177,6 +286,35 @@ export default function Home() {
           </div>
         </div>
       </header>
+
+      {/* PDF Status Panel */}
+      {indexedPDFs && indexedPDFs.indexed_pdfs.length > 0 && (
+        <div className="bg-blue-50 border-b border-blue-200 p-3">
+          <div className="max-w-6xl mx-auto flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <FileText className="w-5 h-5 text-blue-600" />
+              <div>
+                <p className="text-sm font-medium text-blue-900">
+                  📚 RAG-Indexed: {indexedPDFs.indexed_pdfs.length} PDF{indexedPDFs.indexed_pdfs.length !== 1 ? 's' : ''}
+                </p>
+                <p className="text-xs text-blue-700">
+                  {indexedPDFs.total_chunks} chunks ready for semantic search
+                </p>
+                <p className="text-xs text-blue-600 mt-1">
+                  Files: {indexedPDFs.indexed_pdfs.join(', ')}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={removePDF}
+              className="p-1 hover:bg-blue-200 rounded-lg transition-colors"
+              title="Clear all PDFs"
+            >
+              <X className="w-4 h-4 text-blue-600" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Settings Panel */}
       {showSettings && (
